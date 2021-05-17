@@ -7,6 +7,7 @@ import skimage.io
 from natsort import natsorted, ns
 
 
+
 def load_images():
 
     '''Load original, non-edited images. Modify image folder according to your original image directory.'''
@@ -24,6 +25,8 @@ def load_images():
         #orig_img[i] = cv2.cvtColor(orig_img[i], cv2.COLOR_BGR2GRAY)
 
     return orig_img
+
+
 
 
 def align_images(img):
@@ -48,51 +51,80 @@ def align_images(img):
 
 def merge_images_mertens(img):
     
-    '''Merging previously aligned images into one image.'''
+    '''Merging previously aligned images into one image. Exposure fusion method by Mertens is applied.'''
 
-
-    if(merge_type == 'mertens'):
 
         mertens_merge = cv2.createMergeMertens()
         img_merged = mertens_merge.process(img)
-
-    else:
-        print('Wrong input argument!')
 
     return img_merged
 
 
 
-def merge_images_debevec(img, exposure_times):
+
+
+def merge_images_debevec(img, exposure_times, response):
+
+    '''Merging previously aligned images into one image. HDR image is obtained with Debevec algorithm. Response can be 'crf' or 'no_crf' .'''
     
     #For Debevec algorithm, we need to know exposure times! If images are annotated, this can be extracted from image metadata. 
     # Tone mapping is also required for Debevec function.   
     if(merge_type == 'debevec'):
 
         debevec_merge = cv2.createMergeDebevec()
-        img_merged = debevec_merge.process(img, times = exposure_times.copy())
-        tonemap_debevec = cv2.createTonemap(gamma = 2.0)
-        res_debevec = tonemap1.process(img_merged.copy())
-        img_merged = res_debevec
+      
+
+        if(response == 'crf'):
+
+            cal_debevec = cv2.createCalibrateDebevec()
+            CRF_debevec = cal_debevec.process(img, times = exposure_times)
+            img_merged = debevec_merge.process(img, times = exposure_times.copy(), response = CRF_debevec.copy())
+
+        elif(response == 'no_crf'):
+
+            img_merged = debevec_merge.process(img, times = exposure_times.copy())
+            tonemap_debevec = cv2.createTonemap(gamma = 2.0)
+            res_debevec = tonemap1.process(img_merged.copy())
+            img_merged = res_debevec
+        
+        else:
+            print('Invalid response argument. Please enter "crf" or "no_crf". ')
+
 
     else:
-        print('Wrong input argument!')
+        print('Invalid input argument!')
 
     return img_merged
 
 
 
-def merge_images_robertson(img, exposure_times):
+
+def merge_images_robertson(img, exposure_times, response):
+
+    '''Merging previously aligned images into one image. HDR image is obtained with Robertson algorithm.'''
+
+    robertson_merge = cv2.createMergeRobertson()
 
     if(merge_type == 'robertson'):
 
-        robertson_merge = cv2.createMergeRobertson()
-        img_merged = robertson_merge.process(img, times = exposure_times.copy())
+        if(response == 'crf'):
+            
+            cal_robertson = cv2.createCalibrateRobertson()
+            CRF_robertson = cal_robertson.process(img, times = exposure_times)
+            img_merged = robertson_merge.process(img, times = exposure_times.copy(), response = CRF_robertson.copy())
 
-        tonemap_robertson = cv2.createTonemap(gamma = 2.0)
+        elif(response == 'no_crf'):
+        
+            img_merged = robertson_merge.process(img, times = exposure_times.copy())
 
-        res_robertson = tonemap1.process(img_merged.copy())
-        img_merged = res_robertson
+            tonemap_robertson = cv2.createTonemap(gamma = 2.0)
+
+            res_robertson = tonemap1.process(img_merged.copy())
+            img_merged = res_robertson
+        
+        else:
+             print('Invalid response argument. Please enter "crf" or "no_crf". ')
+
 
     else:
         print('Wrong input argument!')
@@ -108,6 +140,3 @@ def convert_and_save(img):
 
     img_cnvt = np.clip(img * 255, 0, 255).astype('uint8')
     cv2.imwrite("HDR", img_cnvt)
-
-
-
